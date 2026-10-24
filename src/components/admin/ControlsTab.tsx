@@ -2,6 +2,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useState } from 'react'
 import { guestUrl } from '../../hooks/useHashRoute'
 import { clearAdminSession } from '../../lib/adminSession'
+import { backupEnabled, downloadCsv, picksToCsv, sendBackup, toBackupEntry } from '../../lib/backup'
 import type { GameState, Standings } from '../../lib/types'
 import { useStore } from '../../store/hooks'
 
@@ -14,6 +15,8 @@ interface Props {
 export function ControlsTab({ state, standings, onError }: Props) {
   const store = useStore()
   const [copied, setCopied] = useState(false)
+  const [backupNote, setBackupNote] = useState<string | null>(null)
+  const allPicks = standings.players.map((p) => p.pick)
   const url = guestUrl()
 
   const run = async (fn: () => Promise<void>) => {
@@ -74,6 +77,44 @@ export function ControlsTab({ state, standings, onError }: Props) {
         <button type="button" className="btn" onClick={copy}>
           {copied ? 'Copied!' : 'Copy link'}
         </button>
+      </section>
+
+      <section className="card">
+        <h2 className="card-title">Backup</h2>
+        <p className="muted small">
+          {backupEnabled()
+            ? 'Each guest’s picks are copied to your Google Sheet when they save. You can also send everything again, or download a spreadsheet file.'
+            : 'Download everyone’s picks as a spreadsheet file. (Automatic Google Sheet backup isn’t set up.)'}
+        </p>
+        {backupEnabled() && (
+          <button
+            type="button"
+            className="btn"
+            disabled={allPicks.length === 0}
+            onClick={() =>
+              run(async () => {
+                setBackupNote(null)
+                await sendBackup(allPicks.map(toBackupEntry))
+                setBackupNote(`Sent ${allPicks.length} ${allPicks.length === 1 ? 'entry' : 'entries'} to the Google Sheet.`)
+              })
+            }
+          >
+            Send all picks to Google Sheet
+          </button>
+        )}
+        <button
+          type="button"
+          className="btn"
+          disabled={allPicks.length === 0}
+          onClick={() => downloadCsv(`wedding-song-bingo-picks-${new Date().toISOString().slice(0, 10)}.csv`, picksToCsv(allPicks))}
+        >
+          Download picks (CSV)
+        </button>
+        {backupNote && (
+          <p className="muted small" role="status">
+            {backupNote}
+          </p>
+        )}
       </section>
 
       <section className="card">

@@ -14,8 +14,15 @@ const catalog = [
 ]
 
 let jsonpRequests = 0
+const backupPosts: { picks: { id: string; name: string; songs: { title: string; artist: string }[] }[] }[] = []
 
 async function stubCatalog(ctx: BrowserContext) {
+  // The Google Sheet backup (Apps Script web app), when configured for the test run.
+  await ctx.route('https://script.google.com/**', (route) => {
+    const body = route.request().postData()
+    if (body) backupPosts.push(JSON.parse(body))
+    void route.fulfill({ status: 200, contentType: 'text/plain', body: 'ok' })
+  })
   await ctx.route('https://itunes.apple.com/**', (route) => {
     // Mirrors what real browsers experience: only JSONP (with a callback) works.
     const params = new URL(route.request().url()).searchParams
@@ -94,6 +101,12 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await submitPicks(sam, 'Sam', ['bright', 'septem', 'shut up'])
   await sam.reload()
   await expect(sam.getByText('Your picks, Sam')).toBeVisible()
+  if (MODE === 'emulator') {
+    // Saving copies the entry to the Google Sheet backup.
+    await expect.poll(() => backupPosts.flatMap((b) => b.picks).find((p) => p.name === 'Sam')?.songs.length).toBe(3)
+  } else {
+    expect(backupPosts).toHaveLength(0) // demo mode never sends anything
+  }
   await expect(sam.getByText('Picks are secret until the dance floor opens', { exact: false })).toBeVisible()
 
   // Jo joins from another phone. Picks stay secret until the admin locks.
@@ -132,6 +145,23 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   // Coming back later: the admin stays signed in (the bug was a forever "Connecting…").
   await admin.reload()
   await expect(admin.getByRole('tab', { name: 'Songs' })).toBeVisible({ timeout: 15_000 })
+
+  // Backup: download a CSV of everyone's picks; with the sheet configured, resend all.
+  await admin.getByRole('tab', { name: 'Controls' }).click()
+  const [download] = await Promise.all([
+    admin.waitForEvent('download'),
+    admin.getByRole('button', { name: 'Download picks (CSV)' }).click(),
+  ])
+  const csv = await (await import('node:fs/promises')).readFile(await download.path(), 'utf8')
+  expect(csv).toContain('Sam,Mr. Brightside,The Killers')
+  expect(csv).toContain('Jo,')
+  if (MODE === 'emulator') {
+    const before = backupPosts.length
+    await admin.getByRole('button', { name: 'Send all picks to Google Sheet' }).click()
+    await expect(admin.getByText('Sent 2 entries to the Google Sheet.')).toBeVisible()
+    await expect.poll(() => backupPosts.length).toBeGreaterThan(before)
+    expect(backupPosts[backupPosts.length - 1].picks.map((p) => p.name).sort()).toEqual(['Jo', 'Sam'])
+  }
 
   // Lock: guests see the banner and lose the edit button.
   await admin.getByRole('tab', { name: 'Controls' }).click()

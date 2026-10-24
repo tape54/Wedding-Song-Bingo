@@ -14,7 +14,7 @@
     "test:watch": "vitest",
     "test:rules": "firebase emulators:exec --only firestore --project demo-wedding-song-bingo \"vitest run --config vitest.rules.config.ts\"",
     "e2e": "playwright test",
-    "e2e:emulator": "firebase emulators:exec --only auth,firestore --project demo-wedding-song-bingo \"VITE_FIREBASE_EMULATOR=1 E2E_MODE=emulator playwright test\"",
+    "e2e:emulator": "firebase emulators:exec --only auth,firestore --project demo-wedding-song-bingo \"VITE_FIREBASE_EMULATOR=1 VITE_BACKUP_URL=https://script.google.com/macros/s/e2e-test/exec E2E_MODE=emulator playwright test\"",
     "dev:emulator": "firebase emulators:exec --only auth,firestore --project demo-wedding-song-bingo \"VITE_FIREBASE_EMULATOR=1 vite\""
   },
   "dependencies": {

@@ -104,6 +104,30 @@ guest identity.
 - On the admin **Controls** tab tap **Lock picks**; the guest phone should show
   the lock banner. Unlock again until the big day.
 
+## Google Sheet backup
+
+Every time a guest saves their picks, the site can also copy them to a Google
+Sheet, one row per guest (an edit updates that guest's row). The admin
+**Controls** tab also has **Send all picks to Google Sheet** and **Download
+picks (CSV)**, which works even without the sheet.
+
+One-time setup, easiest on a computer:
+
+1. Open the backup sheet in Google Sheets. Choose **Extensions → Apps Script**.
+2. Delete what's in the editor, paste the contents of
+   [`backup/Code.gs`](backup/Code.gs), and click **Save**.
+3. Click **Deploy → New deployment**. Under "Select type" (gear icon) choose
+   **Web app**. Set **Execute as: Me** and **Who has access: Anyone**. Click
+   **Deploy**, then **Authorize access** and allow it with your Google account.
+   Google may warn that the app isn't verified: choose **Advanced → Go to
+   (project name)**, since it's your own script.
+4. Copy the **Web app URL** (it ends in `/exec`) and paste it into
+   [`src/backupConfig.ts`](src/backupConfig.ts). Commit to `main` to publish.
+
+Opening the web app URL in a browser shows "Wedding Song Bingo backup is
+running." Anyone with that URL could add rows to the sheet, so it's a backup,
+not the source of truth; the game itself runs on Firebase.
+
 ## On the night
 
 - Keep the admin page open on your phone (Songs tab). Tap songs as they play.

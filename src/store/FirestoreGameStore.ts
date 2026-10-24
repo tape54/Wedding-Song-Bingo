@@ -31,6 +31,7 @@ import {
   type Firestore,
 } from 'firebase/firestore'
 import { EMULATOR_PROJECT_ID, firebaseConfig, useFirebaseEmulators } from '../firebaseConfig'
+import { sendBackup } from '../lib/backup'
 import { EMPTY_STATE, type GameState, type Hit, type Pick, type Song } from '../lib/types'
 import { validatePick } from '../lib/validate'
 import { StoreError, validatePin, type GameStore, type PickInput, type StoreUser, type Unsubscribe } from './GameStore'
@@ -258,6 +259,10 @@ export class FirestoreGameStore implements GameStore {
     } catch (e) {
       throw friendly(e, this.lastState.locked ? 'locked' : 'permission')
     }
+    // Copy to the Google Sheet backup, if configured. Never blocks the guest.
+    sendBackup([
+      { id: uid, name: input.name.trim(), songs: input.songs.map((s) => ({ title: s.title, artist: s.artist })) },
+    ]).catch((e: unknown) => console.warn('Backup to Google Sheet failed', e))
   }
 
   async deletePick(id: string): Promise<void> {
