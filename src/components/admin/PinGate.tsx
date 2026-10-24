@@ -49,6 +49,19 @@ export function PinGate() {
   }
 
   if (hasAdmin === null && !error) return <p className="muted center">Checking…</p>
+  if (hasAdmin === null) {
+    return (
+      <section className="card">
+        <h2 className="card-title">Can’t reach the game</h2>
+        <div className="error" role="alert">
+          {error}
+        </div>
+        <button type="button" className="btn btn--primary" onClick={() => window.location.reload()}>
+          Reload
+        </button>
+      </section>
+    )
+  }
 
   return (
     <form className="card" onSubmit={submit}>

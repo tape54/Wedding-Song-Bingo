@@ -129,6 +129,10 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await admin.getByRole('button', { name: 'Enter' }).click()
   await expect(admin.getByRole('tab', { name: 'Songs' })).toBeVisible()
 
+  // Coming back later: the admin stays signed in (the bug was a forever "Connecting…").
+  await admin.reload()
+  await expect(admin.getByRole('tab', { name: 'Songs' })).toBeVisible({ timeout: 15_000 })
+
   // Lock: guests see the banner and lose the edit button.
   await admin.getByRole('tab', { name: 'Controls' }).click()
   await admin.getByRole('button', { name: /Lock picks/ }).click()

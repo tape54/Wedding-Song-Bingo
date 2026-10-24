@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { SongSearchProvider } from '../../lib/songSearch'
 import { computeStandings } from '../../lib/standings'
 import { useGameState, usePicks, useUser } from '../../store/hooks'
+import { Connecting } from '../shared/Connecting'
 import { LockedBanner } from '../shared/LockedBanner'
 import { WinnerOverlay } from '../shared/WinnerOverlay'
 import { EveryonesPicks, PicksHidden } from './EveryonesPicks'
@@ -36,7 +37,7 @@ export function GuestPage({ provider }: { provider: SongSearchProvider }) {
       ) : mine ? (
         <MyCard pick={mine} hits={state.hits} locked={state.locked} onEdit={() => setFormOpen(true)} />
       ) : state.locked ? null : (
-        <p className="muted center">Connecting…</p>
+        <Connecting />
       )}
       {state.locked ? (
         <EveryonesPicks standings={standings} hits={state.hits} currentUid={user?.uid} />

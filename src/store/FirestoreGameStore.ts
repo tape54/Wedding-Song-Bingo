@@ -20,9 +20,8 @@ import {
   getDoc,
   getDocs,
   initializeFirestore,
+  memoryLocalCache,
   onSnapshot,
-  persistentLocalCache,
-  persistentMultipleTabManager,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -42,6 +41,27 @@ import { StoreError, validatePin, type GameStore, type PickInput, type StoreUser
  */
 const ADMIN_EMAIL = 'admin@weddingsongbingo.app'
 const pinToPassword = (pin: string) => `wsb-${pin}`
+const DB_TIMEOUT_MS = 10_000
+
+/** Reject if a database call takes too long, so the UI never waits forever. */
+function withTimeout<T>(p: Promise<T>, ms = DB_TIMEOUT_MS): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const t = setTimeout(
+      () => reject(new StoreError('Can’t reach the database. Check your connection and reload.', 'unknown')),
+      ms,
+    )
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e: unknown) => {
+        clearTimeout(t)
+        reject(e)
+      },
+    )
+  })
+}
 
 let firebase: { app: FirebaseApp; auth: Auth; db: Firestore } | null = null
 
@@ -57,10 +77,12 @@ function getFirebase() {
         : firebaseConfig,
     )
   const auth = getAuth(app)
-  // Persistent cache: queued writes survive reloads and the app keeps working
-  // through flaky venue wifi, syncing when the connection returns.
+  // In-memory cache: the IndexedDB-backed multi-tab cache can stall inside
+  // iPhone in-app browsers. Long polling is auto-detected for networks and
+  // browsers that break streaming connections.
   const db = initializeFirestore(app, {
-    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+    localCache: memoryLocalCache(),
+    experimentalAutoDetectLongPolling: true,
   })
   if (useFirebaseEmulators) {
     connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
@@ -92,17 +114,23 @@ export class FirestoreGameStore implements GameStore {
     })
   }
 
+  private resolveSeq = 0
+
+  /** Work out whether this signed-in user is the admin. Only the latest call wins. */
   private async resolveUser(fbUser: User): Promise<void> {
+    const seq = ++this.resolveSeq
     let isAdmin = false
     if (!fbUser.isAnonymous) {
       try {
-        const snap = await getDoc(doc(this.db, 'config', 'admin'))
+        const snap = await withTimeout(getDoc(doc(this.db, 'config', 'admin')))
         isAdmin = snap.exists() && snap.data().uid === fbUser.uid
-      } catch {
+      } catch (e) {
+        console.warn('Admin check failed', e)
         isAdmin = false
       }
     }
-    if (this.auth.currentUser?.uid !== fbUser.uid) return // changed while we looked
+    if (seq !== this.resolveSeq) return // a newer check is in charge
+    if (this.auth.currentUser?.uid !== fbUser.uid) return // signed-in user changed while we looked
     this.setUser({ uid: fbUser.uid, isAdmin })
   }
 
@@ -291,7 +319,7 @@ export class FirestoreGameStore implements GameStore {
 
   async hasAdmin(): Promise<boolean> {
     try {
-      return (await getDoc(doc(this.db, 'config', 'admin'))).exists()
+      return (await withTimeout(getDoc(doc(this.db, 'config', 'admin')))).exists()
     } catch (e) {
       throw friendly(e)
     }

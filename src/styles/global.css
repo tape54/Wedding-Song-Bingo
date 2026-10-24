@@ -553,3 +553,10 @@ a {
   font-size: 11px;
   opacity: 0.6;
 }
+
+.center-block {
+  display: grid;
+  gap: 12px;
+  text-align: center;
+  padding-top: 20vh;
+}

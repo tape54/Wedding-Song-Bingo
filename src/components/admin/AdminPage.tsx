@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { isAdminSessionFresh } from '../../lib/adminSession'
 import { computeStandings } from '../../lib/standings'
 import { useGameState, usePicks, useStore, useUser } from '../../store/hooks'
+import { Connecting } from '../shared/Connecting'
 import { WinnerOverlay } from '../shared/WinnerOverlay'
 import { ControlsTab } from './ControlsTab'
 import { PinGate } from './PinGate'
@@ -30,7 +31,7 @@ export function AdminPage() {
 
   const standings = useMemo(() => computeStandings(picks, state.hits), [picks, state.hits])
 
-  if (!user) return <p className="muted center">Connecting…</p>
+  if (!user) return <Connecting />
   if (!user.isAdmin) return <PinGate />
 
   const error = actionError ?? stateError ?? picksError
