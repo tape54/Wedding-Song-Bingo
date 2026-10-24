@@ -25,6 +25,23 @@ Mamma Mia|ABBA
 Waterloo|ABBA
 Take a Chance on Me|ABBA
 Super Trouper|ABBA
+Fernando|ABBA
+The Winner Takes It All|ABBA
+Voulez-Vous|ABBA
+Does Your Mother Know|ABBA
+Knowing Me, Knowing You|ABBA
+SOS|ABBA
+Chiquitita|ABBA
+Lay All Your Love on Me|ABBA
+Money, Money, Money|ABBA
+Honey, Honey|ABBA
+Thank You for the Music|ABBA
+I Have a Dream|ABBA
+Summer Night City|ABBA
+Angeleyes|ABBA
+Ring Ring|ABBA
+I Do, I Do, I Do, I Do, I Do|ABBA
+Hasta Mañana|ABBA
 Shout|The Isley Brothers
 Twist and Shout|The Beatles
 Hey Jude|The Beatles

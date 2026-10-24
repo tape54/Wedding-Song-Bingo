@@ -3,6 +3,8 @@ import { normalizeTitle, primaryArtist, songKey, squash } from './songKey'
 import type { Song } from './types'
 
 interface Indexed {
+  /** Position in the catalog; the best-known hits are listed first. */
+  rank: number
   song: Song
   title: string
   fullTitle: string
@@ -20,6 +22,7 @@ function getIndex(): Indexed[] {
     if (seen.has(key)) continue
     seen.add(key)
     index.push({
+      rank: index.length,
       // Built-in songs are stored like hand-typed ones; the key is what matters.
       song: { key, title, artist, source: 'manual' },
       title: normalizeTitle(title),
@@ -33,11 +36,11 @@ function getIndex(): Indexed[] {
 const startsWord = (hay: string, w: string) => hay.startsWith(w) || hay.includes(' ' + w)
 
 /** Instant, offline search over the built-in catalog of popular wedding songs. */
-export function searchLocal(term: string, limit = 8): Song[] {
+export function searchLocal(term: string, limit = 12): Song[] {
   const q = squash(term)
   if (q.length < 2) return []
   const words = q.split(' ').filter(Boolean)
-  const scored: { song: Song; score: number }[] = []
+  const scored: { song: Song; score: number; rank: number }[] = []
   for (const e of getIndex()) {
     const hay = `${e.fullTitle} ${e.artist}`
     if (!words.every((w) => hay.includes(w))) continue
@@ -50,14 +53,14 @@ export function searchLocal(term: string, limit = 8): Song[] {
       else if (startsWord(e.artist, w)) score += 6
       else score += 1
     }
-    scored.push({ song: e.song, score })
+    scored.push({ song: e.song, score, rank: e.rank })
   }
-  scored.sort((a, b) => b.score - a.score || a.song.title.localeCompare(b.song.title))
+  scored.sort((a, b) => b.score - a.score || a.rank - b.rank)
   return scored.slice(0, limit).map((s) => s.song)
 }
 
 /** Built-in matches first, then extra online ones. Online artwork upgrades a built-in match. */
-export function mergeResults(local: Song[], remote: Song[], limit = 10): Song[] {
+export function mergeResults(local: Song[], remote: Song[], limit = 16): Song[] {
   const remoteByKey = new Map(remote.map((s) => [s.key, s]))
   const out: Song[] = local.map((s) => remoteByKey.get(s.key) ?? s)
   const seen = new Set(out.map((s) => s.key))

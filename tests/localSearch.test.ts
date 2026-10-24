@@ -26,8 +26,10 @@ describe('searchLocal', () => {
   })
 
   it('finds songs by artist', () => {
-    expect(titles('abba').length).toBeGreaterThan(3)
+    expect(titles('abba').length).toBe(12)
     expect(titles('abba').every((t) => t.endsWith('ABBA'))).toBe(true)
+    // Biggest hits first, not alphabetical.
+    expect(titles('abba')[0]).toBe('Dancing Queen - ABBA')
   })
 
   it('ranks a title-prefix match first', () => {
@@ -63,5 +65,9 @@ describe('mergeResults', () => {
   it('caps the list', () => {
     const many = Array.from({ length: 20 }, (_, i) => s(`S${i}`))
     expect(mergeResults(many, [], 10)).toHaveLength(10)
+  })
+
+  it('shows plenty of an artist’s songs', () => {
+    expect(searchLocal('abba', 12).length).toBe(12)
   })
 })
