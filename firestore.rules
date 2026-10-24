@@ -1,0 +1,79 @@
+rules_version = '2';
+
+// Wedding Song Bingo access rules.
+//
+// Guests are anonymous Firebase Auth users: each can create/edit only their own
+// entry in /picks, and only while the game is unlocked. The admin is the one
+// email/password user whose uid is recorded in /config/admin; only they can
+// change /game/state (lock, played songs) or delete other people's picks.
+service cloud.firestore {
+  match /databases/{db}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function adminPath() {
+      return /databases/$(db)/documents/config/admin;
+    }
+
+    function isAdmin() {
+      return signedIn() && exists(adminPath()) && get(adminPath()).data.uid == request.auth.uid;
+    }
+
+    function statePath() {
+      return /databases/$(db)/documents/game/state;
+    }
+
+    function locked() {
+      return exists(statePath()) && get(statePath()).data.get('locked', false) == true;
+    }
+
+    function validSong(s) {
+      return s is map
+        && s.keys().hasOnly(['key', 'title', 'artist', 'artworkUrl', 'source'])
+        && s.key is string && s.key.size() > 0 && s.key.size() <= 400
+        && s.title is string && s.title.size() > 0 && s.title.size() <= 200
+        && s.artist is string && s.artist.size() > 0 && s.artist.size() <= 200
+        && (!('artworkUrl' in s) || (s.artworkUrl is string && s.artworkUrl.size() <= 500))
+        && s.source in ['itunes', 'manual'];
+    }
+
+    function validPick(d) {
+      return d.keys().hasOnly(['name', 'songs', 'createdAt', 'updatedAt'])
+        && d.name is string && d.name.size() >= 1 && d.name.size() <= 40
+        && d.songs is list && d.songs.size() == 3
+        && validSong(d.songs[0]) && validSong(d.songs[1]) && validSong(d.songs[2])
+        && d.songs[0].key != d.songs[1].key
+        && d.songs[0].key != d.songs[2].key
+        && d.songs[1].key != d.songs[2].key
+        && d.createdAt is timestamp
+        && d.updatedAt is timestamp;
+    }
+
+    match /config/admin {
+      allow read: if signedIn();
+      // Claimed once, by a password-provider user, for their own uid.
+      allow create: if signedIn()
+        && request.auth.token.firebase.sign_in_provider == 'password'
+        && request.resource.data.keys().hasOnly(['uid'])
+        && request.resource.data.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /game/state {
+      allow read: if signedIn();
+      allow write: if isAdmin();
+    }
+
+    match /picks/{uid} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.auth.uid == uid && !locked()
+        && validPick(request.resource.data);
+      allow update: if signedIn() && request.auth.uid == uid && !locked()
+        && validPick(request.resource.data)
+        && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin() || (signedIn() && request.auth.uid == uid && !locked());
+    }
+  }
+}
