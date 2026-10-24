@@ -81,13 +81,14 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await submitPicks(sam, 'Sam', ['bright', 'septem', 'shut up'])
   await sam.reload()
   await expect(sam.getByText('Your picks, Sam')).toBeVisible()
-  await expect(sam.getByText('1 playing')).toBeVisible()
+  await expect(sam.getByText('Picks are secret until the dance floor opens', { exact: false })).toBeVisible()
 
-  // Jo joins from another phone and sees Sam's picks.
+  // Jo joins from another phone. Picks stay secret until the admin locks.
   const jo = await phones.open()
-  await expect(jo.getByRole('heading', { name: 'Sam' })).toBeVisible()
+  await expect(jo.getByText('Picks are secret until the dance floor opens', { exact: false })).toBeVisible()
   await submitPicks(jo, 'Jo', ['bright', 'uptown', 'septem'])
-  await expect(sam.getByText('2 playing')).toBeVisible()
+  await expect(jo.getByRole('heading', { name: 'Sam' })).toHaveCount(0)
+  await expect(sam.getByRole('heading', { name: /^Jo/ })).toHaveCount(0)
 
   // A duplicate song is refused.
   await jo.getByRole('button', { name: 'Edit my picks' }).click()
@@ -120,6 +121,11 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await admin.getByRole('button', { name: /Lock picks/ }).click()
   await expect(sam.getByRole('status')).toContainText('Picks are locked')
   await expect(sam.getByRole('button', { name: 'Edit my picks' })).toHaveCount(0)
+
+  // Locking reveals everyone's picks on every phone.
+  await expect(sam.getByText('2 playing')).toBeVisible()
+  await expect(sam.getByRole('heading', { name: /^Jo/ })).toBeVisible()
+  await expect(jo.getByRole('heading', { name: /^Sam/ })).toBeVisible()
 
   // Hits propagate live; Jo's third song makes Jo the winner everywhere.
   await admin.getByRole('tab', { name: 'Songs' }).click()

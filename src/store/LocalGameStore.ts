@@ -64,8 +64,15 @@ export class LocalGameStore implements GameStore {
 
   subscribePicks(cb: Listener<Pick[]>): Unsubscribe {
     this.pickListeners.add(cb)
-    cb(this.readPicks())
+    cb(this.visiblePicks())
     return () => this.pickListeners.delete(cb)
+  }
+
+  /** Same visibility as firestore.rules: guests see only their own pick until locked. */
+  private visiblePicks(): Pick[] {
+    const picks = this.readPicks()
+    if (this.user.isAdmin || this.readState().locked) return picks
+    return picks.filter((p) => p.id === this.user.uid)
   }
 
   // ---- guest writes ----
@@ -157,6 +164,7 @@ export class LocalGameStore implements GameStore {
     this.session.setItem(IS_ADMIN_KEY, isAdmin ? '1' : '0')
     this.user = { ...this.user, isAdmin }
     for (const cb of this.userListeners) cb(this.user)
+    this.emitPicks()
   }
 
   private writeState(state: GameState): void {
@@ -172,10 +180,11 @@ export class LocalGameStore implements GameStore {
   private emitState(): void {
     const state = this.readState()
     for (const cb of this.stateListeners) cb(state)
+    this.emitPicks() // locking changes which picks are visible
   }
 
   private emitPicks(): void {
-    const picks = this.readPicks()
+    const picks = this.visiblePicks()
     for (const cb of this.pickListeners) cb(picks)
   }
 }

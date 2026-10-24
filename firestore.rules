@@ -3,7 +3,8 @@ rules_version = '2';
 // Wedding Song Bingo access rules.
 //
 // Guests are anonymous Firebase Auth users: each can create/edit only their own
-// entry in /picks, and only while the game is unlocked. The admin is the one
+// entry in /picks, and only while the game is unlocked. Until the admin locks
+// picks, guests can read only their own entry; locking reveals everyone's. The admin is the one
 // email/password user whose uid is recorded in /config/admin; only they can
 // change /game/state (lock, played songs) or delete other people's picks.
 service cloud.firestore {
@@ -67,7 +68,8 @@ service cloud.firestore {
     }
 
     match /picks/{uid} {
-      allow read: if signedIn();
+      allow get: if signedIn() && (request.auth.uid == uid || locked() || isAdmin());
+      allow list: if signedIn() && (locked() || isAdmin());
       allow create: if signedIn() && request.auth.uid == uid && !locked()
         && validPick(request.resource.data);
       allow update: if signedIn() && request.auth.uid == uid && !locked()

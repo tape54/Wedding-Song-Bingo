@@ -131,14 +131,64 @@ export class FirestoreGameStore implements GameStore {
     )
   }
 
+  /**
+   * Guests may only read their own entry until the admin locks picks; then
+   * everyone's are revealed. The admin always sees all. firestore.rules enforces
+   * this, so the listener switches between "my doc" and "whole collection".
+   */
   subscribePicks(cb: (picks: Pick[]) => void, onError?: (err: Error) => void): Unsubscribe {
-    return this.whenSignedIn(() =>
-      onSnapshot(
-        collection(this.db, 'picks'),
-        (snap) => cb(snap.docs.map((d) => toPick(d.id, d.data({ serverTimestamps: 'estimate' })))),
-        (e) => onError?.(friendly(e)),
-      ),
-    )
+    let user: StoreUser | null = null
+    let locked = false
+    let current = ''
+    let inner: Unsubscribe | null = null
+
+    const stop = () => {
+      inner?.()
+      inner = null
+      current = ''
+    }
+    const restart = () => {
+      if (!user) return stop()
+      const all = user.isAdmin || locked
+      const key = `${user.uid}:${all ? 'all' : 'own'}`
+      if (key === current) return
+      stop()
+      current = key
+      if (all) {
+        inner = onSnapshot(
+          collection(this.db, 'picks'),
+          (snap) => cb(snap.docs.map((d) => toPick(d.id, d.data({ serverTimestamps: 'estimate' })))),
+          (e) => {
+            // Unlocking revokes access to others' picks; fall back to our own.
+            if (authCode(e) === 'permission-denied' && !user?.isAdmin) {
+              locked = false
+              restart()
+            } else onError?.(friendly(e))
+          },
+        )
+      } else {
+        const uid = user.uid
+        inner = onSnapshot(
+          doc(this.db, 'picks', uid),
+          (snap) => cb(snap.exists() ? [toPick(uid, snap.data({ serverTimestamps: 'estimate' }))] : []),
+          (e) => onError?.(friendly(e)),
+        )
+      }
+    }
+
+    const offUser = this.subscribeUser((u) => {
+      user = u
+      restart()
+    })
+    const offState = this.subscribeState((s) => {
+      locked = s.locked
+      restart()
+    })
+    return () => {
+      offUser()
+      offState()
+      stop()
+    }
   }
 
   /** Firestore rules require a signed-in user, so defer listeners until anonymous auth completes. */

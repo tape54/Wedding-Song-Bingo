@@ -4,7 +4,7 @@ import { computeStandings } from '../../lib/standings'
 import { useGameState, usePicks, useUser } from '../../store/hooks'
 import { LockedBanner } from '../shared/LockedBanner'
 import { WinnerOverlay } from '../shared/WinnerOverlay'
-import { EveryonesPicks } from './EveryonesPicks'
+import { EveryonesPicks, PicksHidden } from './EveryonesPicks'
 import { MyCard } from './MyCard'
 import { PickForm } from './PickForm'
 
@@ -38,7 +38,11 @@ export function GuestPage({ provider }: { provider: SongSearchProvider }) {
       ) : state.locked ? null : (
         <p className="muted center">Connecting…</p>
       )}
-      <EveryonesPicks standings={standings} hits={state.hits} currentUid={user?.uid} />
+      {state.locked ? (
+        <EveryonesPicks standings={standings} hits={state.hits} currentUid={user?.uid} />
+      ) : (
+        <PicksHidden />
+      )}
       <WinnerOverlay winners={standings.winners} currentUid={user?.uid} />
     </>
   )

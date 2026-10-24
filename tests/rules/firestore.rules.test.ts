@@ -3,7 +3,7 @@
  * Firestore emulator (needs Java) and executes this file against it.
  */
 import { assertFails, assertSucceeds, initializeTestEnvironment, type RulesTestEnvironment } from '@firebase/rules-unit-testing'
-import { deleteDoc, doc, getDoc, setDoc, updateDoc } from 'firebase/firestore'
+import { collection, deleteDoc, doc, getDoc, getDocs, setDoc, updateDoc } from 'firebase/firestore'
 import { readFileSync } from 'node:fs'
 import { afterAll, beforeAll, beforeEach, describe, it } from 'vitest'
 
@@ -50,7 +50,26 @@ describe('picks', () => {
     await assertFails(setDoc(doc(guestCtx(OTHER).firestore(), 'picks', GUEST), validPick()))
     await seedPick(GUEST)
     await assertFails(getDoc(doc(env.unauthenticatedContext().firestore(), 'picks', GUEST)))
-    await assertSucceeds(getDoc(doc(guestCtx(OTHER).firestore(), 'picks', GUEST)))
+  })
+
+  it('keeps picks secret until locked: guests read only their own, admin reads all', async () => {
+    await seedAdmin()
+    await seedPick(GUEST)
+    await seedPick(OTHER)
+    const guest = guestCtx(GUEST).firestore()
+    await assertSucceeds(getDoc(doc(guest, 'picks', GUEST)))
+    await assertFails(getDoc(doc(guest, 'picks', OTHER)))
+    await assertFails(getDocs(collection(guest, 'picks')))
+    await assertSucceeds(getDocs(collection(passwordCtx(ADMIN).firestore(), 'picks')))
+
+    await seedState({ locked: true, hits: {} })
+    await assertSucceeds(getDoc(doc(guest, 'picks', OTHER)))
+    await assertSucceeds(getDocs(collection(guest, 'picks')))
+    await assertFails(getDocs(collection(env.unauthenticatedContext().firestore(), 'picks')))
+  })
+
+  it('a guest can read their own entry before creating it (empty is fine)', async () => {
+    await assertSucceeds(getDoc(doc(guestCtx(GUEST).firestore(), 'picks', GUEST)))
   })
 
   it('rejects malformed entries', async () => {

@@ -49,3 +49,16 @@ export function EveryonesPicks({ standings, hits, currentUid }: Props) {
     </section>
   )
 }
+
+/** Shown to guests before the dance floor opens: picks are a secret until then. */
+export function PicksHidden() {
+  return (
+    <section className="card picks-hidden">
+      <h2 className="card-title">Everyone’s picks</h2>
+      <p className="muted">
+        🤫 Picks are secret until the dance floor opens. The moment picks lock, everyone’s songs are revealed here
+        and you can watch them light up.
+      </p>
+    </section>
+  )
+}

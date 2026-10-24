@@ -6,7 +6,8 @@ guest whose 3 songs have all played wins, and every phone lights up with confett
 
 - Guests open one link, type their name, and pick songs from a type-ahead list.
   No accounts, no app to install.
-- Everyone can see everyone's picks and watch them light up live.
+- Picks stay secret until you lock them. Then everyone's picks are revealed and
+  light up live as songs play. The admin always sees all picks.
 - The admin (you) has a PIN-protected page to **lock picks** when the dance floor
   starts, **mark songs as played**, see standings, and reset.
 - Hosted free on GitHub Pages; live data on Firebase's free plan. No credit card,
@@ -16,7 +17,8 @@ guest whose 3 songs have all played wins, and every phone lights up with confett
 
 1. Before the wedding, share the link (or the QR code from the admin page). Guests
    enter a name and 3 songs. They can edit their picks any time until you lock.
-2. When the dance floor opens, tap **Lock picks** on the admin page.
+2. When the dance floor opens, tap **Lock picks** on the admin page. That also
+   reveals everyone's picks on every phone.
 3. As each song plays, tap it on the admin **Songs** tab. Everyone who picked it
    gets a tick instantly. Tap again if you made a mistake.
 4. The moment someone's third song plays, every phone shows the winner. If one

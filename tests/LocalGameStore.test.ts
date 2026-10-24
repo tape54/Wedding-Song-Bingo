@@ -116,4 +116,32 @@ describe('LocalGameStore', () => {
     other.subscribePicks(cb)
     expect(latest<Pick[]>(cb)).toEqual([])
   })
+
+  it('hides other guests\' picks until locked; admin always sees all', async () => {
+    const sam = new LocalGameStore()
+    await sam.savePick({ name: 'Sam', songs })
+    const samCb = vi.fn()
+    sam.subscribePicks(samCb)
+
+    sessionStorage.clear()
+    const jo = new LocalGameStore()
+    await jo.savePick({ name: 'Jo', songs })
+    const joCb = vi.fn()
+    jo.subscribePicks(joCb)
+    expect(latest<Pick[]>(joCb).map((p) => p.name)).toEqual(['Jo'])
+
+    sessionStorage.clear()
+    const admin = new LocalGameStore()
+    await admin.adminSetup('1234')
+    const adminCb = vi.fn()
+    admin.subscribePicks(adminCb)
+    expect(latest<Pick[]>(adminCb).map((p) => p.name).sort()).toEqual(['Jo', 'Sam'])
+
+    await admin.setLocked(true)
+    // Other "tabs" learn about the lock through the storage event in a browser;
+    // here we read again through a fresh subscription.
+    const joAfter = vi.fn()
+    jo.subscribePicks(joAfter)
+    expect(latest<Pick[]>(joAfter).map((p) => p.name).sort()).toEqual(['Jo', 'Sam'])
+  })
 })
