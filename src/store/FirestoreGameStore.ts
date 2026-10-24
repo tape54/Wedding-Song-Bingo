@@ -1,5 +1,6 @@
-import { initializeApp } from 'firebase/app'
+import { getApps, initializeApp, type FirebaseApp } from 'firebase/app'
 import {
+  connectAuthEmulator,
   createUserWithEmailAndPassword,
   getAuth,
   onAuthStateChanged,
@@ -11,13 +12,17 @@ import {
 } from 'firebase/auth'
 import {
   collection,
+  connectFirestoreEmulator,
+  deleteDoc,
   deleteField,
   doc,
   FieldPath,
   getDoc,
   getDocs,
-  getFirestore,
+  initializeFirestore,
   onSnapshot,
+  persistentLocalCache,
+  persistentMultipleTabManager,
   serverTimestamp,
   setDoc,
   Timestamp,
@@ -26,7 +31,7 @@ import {
   type DocumentData,
   type Firestore,
 } from 'firebase/firestore'
-import { firebaseConfig } from '../firebaseConfig'
+import { EMULATOR_PROJECT_ID, firebaseConfig, useFirebaseEmulators } from '../firebaseConfig'
 import { EMPTY_STATE, type GameState, type Hit, type Pick, type Song } from '../lib/types'
 import { validatePick } from '../lib/validate'
 import { StoreError, validatePin, type GameStore, type PickInput, type StoreUser, type Unsubscribe } from './GameStore'
@@ -38,6 +43,33 @@ import { StoreError, validatePin, type GameStore, type PickInput, type StoreUser
 const ADMIN_EMAIL = 'admin@weddingsongbingo.app'
 const pinToPassword = (pin: string) => `wsb-${pin}`
 
+let firebase: { app: FirebaseApp; auth: Auth; db: Firestore } | null = null
+
+/** Initialize Firebase once per page (React StrictMode constructs the store twice in dev). */
+function getFirebase() {
+  if (firebase) return firebase
+  const existing = getApps()[0]
+  const app =
+    existing ??
+    initializeApp(
+      useFirebaseEmulators
+        ? { apiKey: 'demo-api-key', authDomain: '127.0.0.1', projectId: EMULATOR_PROJECT_ID }
+        : firebaseConfig,
+    )
+  const auth = getAuth(app)
+  // Persistent cache: queued writes survive reloads and the app keeps working
+  // through flaky venue wifi, syncing when the connection returns.
+  const db = initializeFirestore(app, {
+    localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+  })
+  if (useFirebaseEmulators) {
+    connectAuthEmulator(auth, 'http://127.0.0.1:9099', { disableWarnings: true })
+    connectFirestoreEmulator(db, '127.0.0.1', 8080)
+  }
+  firebase = { app, auth, db }
+  return firebase
+}
+
 export class FirestoreGameStore implements GameStore {
   readonly mode = 'firebase' as const
   private auth: Auth
@@ -47,9 +79,9 @@ export class FirestoreGameStore implements GameStore {
   private lastState: GameState = EMPTY_STATE
 
   constructor() {
-    const app = initializeApp(firebaseConfig)
-    this.auth = getAuth(app)
-    this.db = getFirestore(app)
+    const { auth, db } = getFirebase()
+    this.auth = auth
+    this.db = db
     onAuthStateChanged(this.auth, (fbUser) => {
       if (!fbUser) {
         signInAnonymously(this.auth).catch((e: unknown) => console.error('Anonymous sign-in failed', e))
@@ -153,7 +185,7 @@ export class FirestoreGameStore implements GameStore {
   async deletePick(id: string): Promise<void> {
     this.requireUser()
     try {
-      await deleteDocSafe(this.db, 'picks', id)
+      await deleteDoc(doc(this.db, 'picks', id))
     } catch (e) {
       throw friendly(e)
     }
@@ -271,11 +303,6 @@ export class FirestoreGameStore implements GameStore {
   private requireAdmin(): void {
     if (!this.requireUser().isAdmin) throw new StoreError('Admin only.', 'permission')
   }
-}
-
-async function deleteDocSafe(db: Firestore, col: string, id: string): Promise<void> {
-  const { deleteDoc } = await import('firebase/firestore')
-  await deleteDoc(doc(db, col, id))
 }
 
 function cleanSong(s: Song): Song {

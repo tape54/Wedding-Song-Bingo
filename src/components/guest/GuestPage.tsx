@@ -12,13 +12,16 @@ export function GuestPage({ provider }: { provider: SongSearchProvider }) {
   const user = useUser()
   const { state, error: stateError } = useGameState()
   const { picks, error: picksError } = usePicks()
-  const [editing, setEditing] = useState(false)
+  // The form shows whenever the guest has no entry yet, when they tap Edit, and
+  // from the start of a save until the store confirms it, so a flaky connection
+  // can't show "Your picks" for a write that never reached the server.
+  const [formOpen, setFormOpen] = useState(false)
 
   const mine = useMemo(() => picks.find((p) => p.id === user?.uid) ?? null, [picks, user])
   const standings = useMemo(() => computeStandings(picks, state.hits), [picks, state.hits])
   const error = stateError ?? picksError
 
-  const showForm = !state.locked && (editing || (!mine && user !== null))
+  const showForm = !state.locked && user !== null && (formOpen || !mine)
 
   return (
     <>
@@ -29,9 +32,9 @@ export function GuestPage({ provider }: { provider: SongSearchProvider }) {
         </div>
       )}
       {showForm ? (
-        <PickForm existing={mine} provider={provider} onDone={() => setEditing(false)} />
+        <PickForm existing={mine} provider={provider} onSaveStart={() => setFormOpen(true)} onDone={() => setFormOpen(false)} />
       ) : mine ? (
-        <MyCard pick={mine} hits={state.hits} locked={state.locked} onEdit={() => setEditing(true)} />
+        <MyCard pick={mine} hits={state.hits} locked={state.locked} onEdit={() => setFormOpen(true)} />
       ) : state.locked ? null : (
         <p className="muted center">Connecting…</p>
       )}

@@ -14,6 +14,11 @@ export const firebaseConfig = {
   appId: '',
 }
 
+/** Set VITE_FIREBASE_EMULATOR=1 to run against local Firebase emulators (see README). */
+export const useFirebaseEmulators = import.meta.env.VITE_FIREBASE_EMULATOR === '1'
+export const EMULATOR_PROJECT_ID = 'demo-wedding-song-bingo'
+
 export function isFirebaseConfigured(): boolean {
+  if (useFirebaseEmulators) return true
   return !firebaseConfig.apiKey.startsWith('PASTE') && firebaseConfig.projectId !== ''
 }

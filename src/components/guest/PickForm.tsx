@@ -10,10 +10,11 @@ import { SongPicker } from './SongPicker'
 interface Props {
   existing: Pick | null
   provider: SongSearchProvider
+  onSaveStart: () => void
   onDone: () => void
 }
 
-export function PickForm({ existing, provider, onDone }: Props) {
+export function PickForm({ existing, provider, onSaveStart, onDone }: Props) {
   const store = useStore()
   const [name, setName] = useState(existing?.name ?? '')
   const [songs, setSongs] = useState<Song[]>(existing?.songs ?? [])
@@ -38,6 +39,7 @@ export function PickForm({ existing, provider, onDone }: Props) {
     }
     setSaving(true)
     setError(null)
+    onSaveStart()
     try {
       await store.savePick({ name, songs })
       onDone()

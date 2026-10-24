@@ -11,8 +11,14 @@ export function isDemoMode(search = typeof location !== 'undefined' ? location.s
   return !isFirebaseConfigured()
 }
 
-export async function createStore(): Promise<GameStore> {
-  if (isDemoMode()) return new LocalGameStore()
-  const { FirestoreGameStore } = await import('./FirestoreGameStore')
-  return new FirestoreGameStore()
+let storePromise: Promise<GameStore> | null = null
+
+/** One store per page; React StrictMode may ask twice. */
+export function createStore(): Promise<GameStore> {
+  storePromise ??= (async () => {
+    if (isDemoMode()) return new LocalGameStore()
+    const { FirestoreGameStore } = await import('./FirestoreGameStore')
+    return new FirestoreGameStore()
+  })()
+  return storePromise
 }
