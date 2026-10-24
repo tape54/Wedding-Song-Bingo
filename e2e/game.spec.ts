@@ -12,11 +12,23 @@ const catalog = [
   { kind: 'song', trackId: 4, trackName: 'Uptown Funk (feat. Bruno Mars)', artistName: 'Mark Ronson' },
 ]
 
+let jsonpRequests = 0
+
 async function stubCatalog(ctx: BrowserContext) {
   await ctx.route('https://itunes.apple.com/**', (route) => {
-    const term = (new URL(route.request().url()).searchParams.get('term') ?? '').toLowerCase()
+    // Mirrors what real browsers experience: only JSONP (with a callback) works.
+    const params = new URL(route.request().url()).searchParams
+    const term = (params.get('term') ?? '').toLowerCase()
     const results = catalog.filter((r) => `${r.trackName} ${r.artistName}`.toLowerCase().includes(term))
-    void route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ resultCount: results.length, results }) })
+    const json = JSON.stringify({ resultCount: results.length, results })
+    jsonpRequests += params.has('callback') ? 1 : 0
+    const callback = params.get('callback')
+    void route.fulfill(
+      callback
+        ? { status: 200, contentType: 'text/javascript', body: `\n\n\n${callback}(${json});` }
+        : // Plain fetch() fails in real browsers (no CORS), so fail it here too.
+          { status: 403, contentType: 'text/plain', body: 'blocked' },
+    )
   })
 }
 
@@ -81,6 +93,7 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await submitPicks(sam, 'Sam', ['bright', 'septem', 'shut up'])
   await sam.reload()
   await expect(sam.getByText('Your picks, Sam')).toBeVisible()
+  expect(jsonpRequests).toBeGreaterThan(0)
   await expect(sam.getByText('Picks are secret until the dance floor opens', { exact: false })).toBeVisible()
 
   // Jo joins from another phone. Picks stay secret until the admin locks.

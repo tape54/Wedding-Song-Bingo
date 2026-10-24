@@ -1,5 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
-import { ItunesSearchProvider, manualSong, mapItunesResults } from '../src/lib/songSearch'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ItunesSearchProvider, jsonp, manualSong, mapItunesResults } from '../src/lib/songSearch'
 
 const sample = {
   resultCount: 4,
@@ -35,28 +35,74 @@ describe('mapItunesResults', () => {
 })
 
 describe('ItunesSearchProvider', () => {
-  it('calls the iTunes API, caches by term, and skips short terms', async () => {
-    const fetchFn = vi.fn(async (_input: RequestInfo | URL) => new Response(JSON.stringify(sample), { status: 200 }))
-    const provider = new ItunesSearchProvider(fetchFn as unknown as typeof fetch)
+  it('queries the iTunes API, caches by term, and skips short terms', async () => {
+    const transport = vi.fn(async (_url: string) => sample as unknown)
+    const provider = new ItunesSearchProvider(transport)
 
     expect(await provider.search('m')).toEqual([])
-    expect(fetchFn).not.toHaveBeenCalled()
+    expect(transport).not.toHaveBeenCalled()
 
     const first = await provider.search('Mr Bright')
     expect(first).toHaveLength(2)
-    const url = String(fetchFn.mock.calls[0][0])
+    const url = String(transport.mock.calls[0][0])
     expect(url).toContain('https://itunes.apple.com/search?')
     expect(url).toContain('term=mr+bright')
     expect(url).toContain('entity=song')
 
     await provider.search('mr bright ')
-    expect(fetchFn).toHaveBeenCalledTimes(1)
+    expect(transport).toHaveBeenCalledTimes(1)
   })
 
-  it('throws on a non-OK response so the UI can offer manual entry', async () => {
-    const fetchFn = vi.fn(async (_input: RequestInfo | URL) => new Response("rate limited", { status: 403 }))
-    const provider = new ItunesSearchProvider(fetchFn as unknown as typeof fetch)
-    await expect(provider.search('hello')).rejects.toThrow(/403/)
+  it('surfaces transport failures so the UI can offer manual entry', async () => {
+    const provider = new ItunesSearchProvider(async () => {
+      throw new Error('Song search could not load')
+    })
+    await expect(provider.search('hello')).rejects.toThrow(/could not load/)
+  })
+})
+
+describe('jsonp', () => {
+  afterEach(() => {
+    vi.useRealTimers()
+    document.head.querySelectorAll('script').forEach((s) => s.remove())
+  })
+
+  const lastScript = () => {
+    const scripts = document.head.querySelectorAll('script')
+    return scripts[scripts.length - 1] as HTMLScriptElement
+  }
+  const callbackName = (script: HTMLScriptElement) => new URL(script.src).searchParams.get('callback')!
+
+  it('adds a callback parameter, resolves with the payload, and cleans up', async () => {
+    const p = jsonp('https://itunes.apple.com/search?term=x')
+    const script = lastScript()
+    expect(script.src).toMatch(/^https:\/\/itunes\.apple\.com\/search\?term=x&callback=__wsbJsonp/)
+    const cb = callbackName(script)
+    ;(window as unknown as Record<string, (d: unknown) => void>)[cb]({ resultCount: 0, results: [] })
+    await expect(p).resolves.toEqual({ resultCount: 0, results: [] })
+    expect(script.isConnected).toBe(false)
+    // A duplicate late response is harmless.
+    expect(() => (window as unknown as Record<string, (d: unknown) => void>)[cb]({})).not.toThrow()
+  })
+
+  it('rejects when the script fails to load', async () => {
+    const p = jsonp('https://itunes.apple.com/search?term=x')
+    lastScript().dispatchEvent(new Event('error'))
+    await expect(p).rejects.toThrow(/could not load/)
+  })
+
+  it('rejects on timeout', async () => {
+    vi.useFakeTimers()
+    const p = jsonp('https://itunes.apple.com/search?term=x', undefined, 1000)
+    vi.advanceTimersByTime(1001)
+    await expect(p).rejects.toThrow(/timed out/)
+  })
+
+  it('rejects with AbortError when aborted', async () => {
+    const controller = new AbortController()
+    const p = jsonp('https://itunes.apple.com/search?term=x', controller.signal)
+    controller.abort()
+    await expect(p).rejects.toMatchObject({ name: 'AbortError' })
   })
 })
 

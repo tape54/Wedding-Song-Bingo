@@ -49,6 +49,71 @@ export function mapItunesResults(json: unknown, limit = RESULT_LIMIT): Song[] {
   return songs
 }
 
+/** Loads a URL and resolves with its parsed JSON body. */
+export type JsonTransport = (url: string, signal?: AbortSignal) => Promise<unknown>
+
+const JSONP_TIMEOUT_MS = 8000
+let jsonpSeq = 0
+
+/**
+ * Load JSON through a <script> tag with a `callback` parameter (JSONP). The
+ * iTunes Search API doesn't send CORS headers, so a plain fetch() from another
+ * website is blocked by the browser; Apple documents JSONP for browser use.
+ */
+export function jsonp(url: string, signal?: AbortSignal, timeoutMs = JSONP_TIMEOUT_MS): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    if (signal?.aborted) return reject(new DOMException('Aborted', 'AbortError'))
+    const w = window as unknown as Record<string, unknown>
+    const name = `__wsbJsonp${Date.now().toString(36)}_${jsonpSeq++}`
+    const script = document.createElement('script')
+    let settled = false
+
+    const finish = () => {
+      settled = true
+      clearTimeout(timer)
+      signal?.removeEventListener('abort', onAbort)
+      script.remove()
+      // A late response must not hit an undefined function.
+      w[name] = () => {}
+      setTimeout(() => delete w[name], 60_000)
+    }
+    const fail = (err: Error) => {
+      if (settled) return
+      finish()
+      reject(err)
+    }
+    const onAbort = () => fail(new DOMException('Aborted', 'AbortError'))
+    const timer = setTimeout(() => fail(new Error('Song search timed out')), timeoutMs)
+
+    w[name] = (data: unknown) => {
+      if (settled) return
+      finish()
+      resolve(data)
+    }
+    script.onerror = () => fail(new Error('Song search could not load'))
+    script.async = true
+    script.src = `${url}${url.includes('?') ? '&' : '?'}callback=${name}`
+    signal?.addEventListener('abort', onAbort)
+    document.head.appendChild(script)
+  })
+}
+
+export async function fetchJson(url: string, signal?: AbortSignal): Promise<unknown> {
+  const res = await fetch(url, { signal })
+  if (!res.ok) throw new Error(`Song search failed (${res.status})`)
+  return res.json()
+}
+
+/** JSONP first (works without CORS); plain fetch as a backup. */
+export const defaultTransport: JsonTransport = async (url, signal) => {
+  try {
+    return await jsonp(url, signal)
+  } catch (e) {
+    if (signal?.aborted) throw e
+    return fetchJson(url, signal)
+  }
+}
+
 /**
  * Keyless public catalog search. Roughly 20 requests/minute per IP, so callers
  * debounce and we cache every term we have seen.
@@ -56,7 +121,7 @@ export function mapItunesResults(json: unknown, limit = RESULT_LIMIT): Song[] {
 export class ItunesSearchProvider implements SongSearchProvider {
   private cache = new Map<string, Song[]>()
 
-  constructor(private fetchFn: typeof fetch = (...args) => fetch(...args)) {}
+  constructor(private transport: JsonTransport = defaultTransport) {}
 
   async search(term: string, signal?: AbortSignal): Promise<Song[]> {
     const q = term.trim().toLowerCase()
@@ -66,9 +131,7 @@ export class ItunesSearchProvider implements SongSearchProvider {
     const url =
       'https://itunes.apple.com/search?' +
       new URLSearchParams({ term: q, entity: 'song', media: 'music', limit: '25' })
-    const res = await this.fetchFn(url, { signal })
-    if (!res.ok) throw new Error(`Song search failed (${res.status})`)
-    const songs = mapItunesResults(await res.json())
+    const songs = mapItunesResults(await this.transport(url, signal))
     if (this.cache.size > 200) this.cache.clear()
     this.cache.set(q, songs)
     return songs
