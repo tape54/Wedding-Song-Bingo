@@ -52,7 +52,7 @@ export function mapItunesResults(json: unknown, limit = RESULT_LIMIT): Song[] {
 /** Loads a URL and resolves with its parsed JSON body. */
 export type JsonTransport = (url: string, signal?: AbortSignal) => Promise<unknown>
 
-const JSONP_TIMEOUT_MS = 8000
+const JSONP_TIMEOUT_MS = 6000
 let jsonpSeq = 0
 
 /**
@@ -108,9 +108,15 @@ export async function fetchJson(url: string, signal?: AbortSignal): Promise<unkn
 export const defaultTransport: JsonTransport = async (url, signal) => {
   try {
     return await jsonp(url, signal)
-  } catch (e) {
-    if (signal?.aborted) throw e
-    return fetchJson(url, signal)
+  } catch (jsonpError) {
+    if (signal?.aborted) throw jsonpError
+    try {
+      return await fetchJson(url, signal)
+    } catch (fetchError) {
+      if (signal?.aborted) throw fetchError
+      const why = (e: unknown) => (e instanceof Error ? e.message : String(e))
+      throw new Error(`${why(jsonpError)}; ${why(fetchError)}`, { cause: fetchError })
+    }
   }
 }
 

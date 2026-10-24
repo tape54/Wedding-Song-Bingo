@@ -10,6 +10,7 @@ const catalog = [
   { kind: 'song', trackId: 2, trackName: 'September', artistName: 'Earth, Wind & Fire' },
   { kind: 'song', trackId: 3, trackName: 'Shut Up and Dance', artistName: 'WALK THE MOON' },
   { kind: 'song', trackId: 4, trackName: 'Uptown Funk (feat. Bruno Mars)', artistName: 'Mark Ronson' },
+  { kind: 'song', trackId: 5, trackName: 'Zebra Wedding Waltz', artistName: 'The Obscure Testers', artworkUrl100: 'https://example.invalid/100x100bb.jpg' },
 ]
 
 let jsonpRequests = 0
@@ -93,7 +94,6 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await submitPicks(sam, 'Sam', ['bright', 'septem', 'shut up'])
   await sam.reload()
   await expect(sam.getByText('Your picks, Sam')).toBeVisible()
-  expect(jsonpRequests).toBeGreaterThan(0)
   await expect(sam.getByText('Picks are secret until the dance floor opens', { exact: false })).toBeVisible()
 
   // Jo joins from another phone. Picks stay secret until the admin locks.
@@ -170,3 +170,34 @@ test(`full game in ${MODE} mode: picks, lock, hits, winner, undo, reset`, async 
   await admin.getByRole('button', { name: /Reset game/ }).click()
   await expect(sam.getByRole('heading', { name: 'Pick your 3 songs' })).toBeVisible()
 })
+
+test('song search: built-in list is instant, online catalog adds more, and failures are explained', async ({ browser }) => {
+  // Online catalog reachable (JSONP only): a song that isn't built in appears.
+  const ctx = await browser.newContext({ viewport: VIEWPORT })
+  await stubCatalog(ctx)
+  const page = await ctx.newPage()
+  await page.goto(APP)
+  const before = jsonpRequests
+  await page.getByLabel('Song 1', { exact: true }).fill('zebra wedding')
+  await expect(page.getByRole('option', { name: /Zebra Wedding Waltz/ })).toBeVisible()
+  expect(jsonpRequests).toBeGreaterThan(before)
+  // A built-in song shows even before the online answer arrives.
+  await page.getByLabel('Song 1', { exact: true }).fill('dancing que')
+  await expect(page.getByRole('option', { name: /Dancing Queen/ })).toBeVisible()
+  await ctx.close()
+
+  // Online catalog down: built-in songs still listed, with the reason shown.
+  const offline = await browser.newContext({ viewport: VIEWPORT })
+  await offline.route('https://itunes.apple.com/**', (route) => route.abort('blockedbyclient'))
+  const p2 = await offline.newPage()
+  await p2.goto(APP)
+  await p2.getByLabel('Song 1', { exact: true }).fill('gimme gimme')
+  await expect(p2.getByRole('option', { name: /Gimme! Gimme! Gimme!/ })).toBeVisible()
+  await expect(p2.getByText('Online search isn’t reachable', { exact: false })).toBeVisible()
+  await p2.getByLabel('Song 1', { exact: true }).fill('zebra wedding')
+  await expect(p2.getByText('online search isn’t reachable right now', { exact: false })).toBeVisible()
+  await expect(p2.getByRole('button', { name: /Type it in manually/ })).toBeVisible()
+  await p2.screenshot({ path: 'test-results/search-offline.png' })
+  await offline.close()
+})
+

@@ -29,6 +29,7 @@ function Shell() {
       <main className="main">{route === 'admin' ? <AdminPage /> : <GuestPage provider={provider} />}</main>
       <footer className="footer">
         {route === 'admin' ? <a href="#/">← Guest view</a> : <a href="#/admin">Admin</a>}
+        <span className="version">v{__APP_VERSION__}</span>
       </footer>
     </div>
   )

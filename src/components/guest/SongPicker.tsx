@@ -17,7 +17,7 @@ export function SongPicker({ slot, provider, onPick, autoFocus }: Props) {
   const [manual, setManual] = useState(false)
   const [manualTitle, setManualTitle] = useState('')
   const [manualArtist, setManualArtist] = useState('')
-  const { results, status } = useSongSearch(provider, term)
+  const { results, status, onlineError } = useSongSearch(provider, term)
   const listId = useId()
 
   const pick = (song: Song) => {
@@ -91,7 +91,18 @@ export function SongPicker({ slot, provider, onPick, autoFocus }: Props) {
         </ul>
       )}
       {status === 'empty' && <div className="picker-hint">No matches for “{term}”.</div>}
-      {status === 'error' && <div className="picker-hint picker-hint--error">Song search isn’t reachable right now.</div>}
+      {status === 'error' && (
+        <div className="picker-hint picker-hint--error">
+          No match in our song list, and online search isn’t reachable right now.
+          <span className="picker-why"> ({onlineError})</span>
+        </div>
+      )}
+      {status === 'results' && onlineError && (
+        <div className="picker-hint">
+          Showing popular wedding songs. Online search isn’t reachable
+          <span className="picker-why"> ({onlineError})</span>.
+        </div>
+      )}
       {(status === 'empty' || status === 'error' || status === 'results') && (
         <button type="button" className="link" onClick={() => { setManual(true); setManualTitle(term) }}>
           Can’t find it? Type it in manually

@@ -16,7 +16,8 @@ function stripDiacritics(s: string): string {
   return s.normalize('NFD').replace(/[̀-ͯ]/g, '')
 }
 
-function squash(s: string): string {
+/** Lowercase, strip accents and punctuation, collapse spaces. */
+export function squash(s: string): string {
   return stripDiacritics(s)
     .toLowerCase()
     .replace(/&/g, ' and ')
